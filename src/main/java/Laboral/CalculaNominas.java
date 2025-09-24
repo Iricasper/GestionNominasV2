@@ -6,20 +6,23 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 // Funcionalidad principal de la aplicación, donde probaremos los diferentes módulos.
 public class CalculaNominas {
     public static void main(String[] args) throws IOException, SQLException {
 
-        String textoTxt = "empleados.txt";
-        String textoBat = "sueldos.bat";
+        String textoTxt = "res/empleados.txt";
+        String textoBat = "res/sueldos.bat";
 
-        List<Empleado> empleadosList = new ArrayList<>();
+        Map<String, Empleado> empleadosMap = new HashMap<>();
 
-        empleadosList.add(new Empleado("James Cosling", "32000032G", 'M', 4, 7));
-        empleadosList.add(new Empleado("Ada Lovelace", "32000031R", 'F'));
+        Empleado e1 = new Empleado("James Cosling", "32000032G", 'M', 4, 7);
+        Empleado e2 = new Empleado("Ada Lovelace", "32000031R", 'F');
+
+        empleadosMap.put(e1.dni, e1);
+        empleadosMap.put(e2.dni, e2);
 
         Connection connection = DriverManager.getConnection(
                 "jdbc:mariadb://localhost:3306/gestion_nominas",
@@ -27,13 +30,13 @@ public class CalculaNominas {
         );
 
         try {
-            for (Empleado each : empleadosList) {
+            for (Empleado each : empleadosMap.values()) {
                 escribe(each);
             }
 
             try (FileWriter fw = new FileWriter(textoTxt)) {
 
-                for (Empleado each : empleadosList) {
+                for (Empleado each : empleadosMap.values()) {
                     fw.write(registraEmpleado(each) + "\n");
                 }
 
@@ -41,16 +44,16 @@ public class CalculaNominas {
                 System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoTxt);
             }
 
-            empleadosList.get(1).incrAnyo();
-            empleadosList.get(0).setCategoria(9);
+            empleadosMap.get("32000031R").incrAnyo();
+            empleadosMap.get("32000032G").setCategoria(9);
 
-            for (Empleado each : empleadosList) {
+            for (Empleado each : empleadosMap.values()) {
                 escribe(each);
             }
 
             try (FileWriter fw = new FileWriter(textoTxt)) {
 
-                for (Empleado each : empleadosList) {
+                for (Empleado each : empleadosMap.values()) {
                     fw.write(registraEmpleado(each) + "\n");
                 }
             } catch (IOException ex) {
@@ -58,7 +61,7 @@ public class CalculaNominas {
             }
 
             try (FileWriter fw = new FileWriter(textoBat)) {
-                for (Empleado each : empleadosList) {
+                for (Empleado each : empleadosMap.values()) {
                     fw.write(each.dni + "\n");
                     fw.write(Nomina.sueldo(each) + "\n");
                 }
@@ -70,23 +73,23 @@ public class CalculaNominas {
             try (PreparedStatement statement = connection.prepareStatement("""
                 UPDATE empleados SET anyos = ? WHERE dni = ?
               """)) {
-                statement.setInt(1, 1);
-                statement.setString(2, empleadosList.get(1).dni);
+                statement.setInt(1, empleadosMap.get("32000031R").anyos);
+                statement.setString(2, "32000031R");
                 statement.executeUpdate();
             }
 
             try (PreparedStatement statement = connection.prepareStatement("""
                 UPDATE empleados SET categoria = ? WHERE dni = ?
               """)) {
-                statement.setInt(1, 9);
-                statement.setString(2, empleadosList.get(0).dni);
+                statement.setInt(1, empleadosMap.get("32000032G").getCategoria());
+                statement.setString(2, "32000032G");
                 statement.executeUpdate();
             }
 
             try (PreparedStatement statement = connection.prepareStatement("""
                 UPDATE nominas SET sueldo = ? WHERE dni = ?
               """)) {
-                for (Empleado each: empleadosList) {
+                for (Empleado each: empleadosMap.values()) {
                     statement.setInt(1, Nomina.sueldo(each));
                     statement.setString(2, each.dni);
                     statement.executeUpdate();
@@ -100,10 +103,9 @@ public class CalculaNominas {
 
     /**
      * Muestra en pantalla todos los datos recogidos.
-     * @param emp
+     * @param emp Empleado cuyos datos mostraremos
      */
     private static void escribe(Empleado emp) {
-
         emp.imprime();
         System.out.println("Nómina: " + Nomina.sueldo(emp) + " €");
         System.out.println();
