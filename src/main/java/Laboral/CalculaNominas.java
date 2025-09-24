@@ -18,30 +18,18 @@ public class CalculaNominas {
 
         Map<String, Empleado> empleadosMap = new HashMap<>();
 
-        Empleado e1 = new Empleado("James Cosling", "32000032G", 'M', 4, 7);
-        Empleado e2 = new Empleado("Ada Lovelace", "32000031R", 'F');
+        generarTxtBase(textoTxt);
 
-        empleadosMap.put(e1.dni, e1);
-        empleadosMap.put(e2.dni, e2);
-
-        Connection connection = DriverManager.getConnection(
-                "jdbc:mariadb://localhost:3306/gestion_nominas",
-                "root", "123456"
-        );
+        lecturaTxt(textoTxt, empleadosMap);
 
         try {
+            Connection connection = DriverManager.getConnection(
+                "jdbc:mariadb://localhost:3306/gestion_nominas",
+                "root", "123456"
+            );
+
             for (Empleado each : empleadosMap.values()) {
                 escribe(each);
-            }
-
-            try (FileWriter fw = new FileWriter(textoTxt)) {
-
-                for (Empleado each : empleadosMap.values()) {
-                    fw.write(registraEmpleado(each) + "\n");
-                }
-
-            } catch (IOException ex) {
-                System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoTxt);
             }
 
             empleadosMap.get("32000031R").incrAnyo();
@@ -56,6 +44,7 @@ public class CalculaNominas {
                 for (Empleado each : empleadosMap.values()) {
                     fw.write(registraEmpleado(each) + "\n");
                 }
+
             } catch (IOException ex) {
                 System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoTxt);
             }
@@ -71,7 +60,8 @@ public class CalculaNominas {
             }
 
             try (PreparedStatement statement = connection.prepareStatement("""
-                UPDATE empleados SET anyos = ? WHERE dni = ?
+                UPDATE empleados
+                    SET anyos = ? WHERE dni = ?
               """)) {
                 statement.setInt(1, empleadosMap.get("32000031R").anyos);
                 statement.setString(2, "32000031R");
@@ -101,6 +91,42 @@ public class CalculaNominas {
         }
     }
 
+    private static void generarTxtBase(String textoTxt) {
+        try (FileWriter fw = new FileWriter(textoTxt)) {
+                fw.write("""
+                        32000032G
+                        James Cosling
+                        M
+                        7
+                        4
+                        32000031R
+                        Ada Lovelace
+                        F
+                        0
+                        1
+                        """);
+        } catch (IOException ex) {
+            System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoTxt);
+        }
+    }
+
+    private static void lecturaTxt(String textoTxt, Map<String, Empleado> empleadosMap) throws IOException {
+        try (BufferedReader br = new BufferedReader(new FileReader(textoTxt))) {
+            String linea = br.readLine();
+                while (linea != null) {
+                    String dni = linea;
+                    String nombre = br.readLine();
+                    char sexo = br.readLine().charAt(0);
+                    int anyos = Integer.parseInt(br.readLine());
+                    int categoria = Integer.parseInt(br.readLine());
+                    empleadosMap.put(dni, (new Empleado(nombre, dni, sexo, categoria, anyos)));
+                    linea = br.readLine();
+                }
+        } catch (NumberFormatException | DatosNoCorrectosException | FileNotFoundException exc) {
+            System.err.println(exc.getMessage());
+        }
+    }
+
     /**
      * Muestra en pantalla todos los datos recogidos.
      * @param emp Empleado cuyos datos mostraremos
@@ -116,8 +142,7 @@ public class CalculaNominas {
                 + emp.nombre + "\n"
                 + emp.sexo + "\n"
                 + emp.anyos + "\n"
-                + emp.getCategoria() + "\n"
-                + Nomina.sueldo(emp) + "\n";
+                + emp.getCategoria();
     }
 
 }
