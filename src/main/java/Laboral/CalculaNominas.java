@@ -188,6 +188,7 @@ public class CalculaNominas {
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
+
         }
     }
 }
