@@ -1,6 +1,5 @@
 package Laboral;
 
-import java.awt.*;
 import java.io.*;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,22 +11,20 @@ import java.util.Scanner;
 
 // Funcionalidad principal de la aplicación, donde probaremos los diferentes módulos.
 public class CalculaNominas {
-    public static void main(String[] args) throws IOException, SQLException {
+    static void main(String[] args) throws IOException, SQLException {
 
-        String textoTxt = "res/empleados.txt";
-        String textoBat = "res/sueldos.bat";
+        String empleadosTxt = "res/empleados.txt";
+        String sueldosBat = "res/sueldos.bat";
+        String empleadosNuevosTxt = "res/empleadosNuevos.txt";
 
         Map<String, Empleado> empleadosMap = new HashMap<>();
 
-        generarTxtBase(textoTxt);
+        generarTxtBase(empleadosTxt);
 
-        lecturaTxt(textoTxt, empleadosMap);
+        lecturaTxt(empleadosTxt, empleadosMap);
 
         try {
-            Connection connection = DriverManager.getConnection(
-                    "jdbc:mariadb://localhost:3306/gestion_nominas",
-                    "root", "123456"
-            );
+            Connection connection = DriverManager.getConnection("jdbc:mariadb://localhost:3306/gestion_nominas", "root", "123456");
 
             for (Empleado each : empleadosMap.values()) {
                 escribe(each);
@@ -40,24 +37,24 @@ public class CalculaNominas {
                 escribe(each);
             }
 
-            try (FileWriter fw = new FileWriter(textoTxt)) {
+            try (FileWriter fw = new FileWriter(empleadosTxt)) {
 
                 for (Empleado each : empleadosMap.values()) {
                     fw.write(registraEmpleado(each) + "\n");
                 }
 
             } catch (IOException ex) {
-                System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoTxt);
+                System.err.println("Se produjo un error al abrir o escribir en el fichero " + empleadosTxt);
             }
 
-            try (FileWriter fw = new FileWriter(textoBat)) {
+            try (FileWriter fw = new FileWriter(sueldosBat)) {
                 for (Empleado each : empleadosMap.values()) {
                     fw.write(each.dni + "\n");
                     fw.write(Nomina.sueldo(each) + "\n");
                 }
 
             } catch (IOException e) {
-                System.err.println("Se produjo un error al abrir o escribir en el fichero " + textoBat);
+                System.err.println("Se produjo un error al abrir o escribir en el fichero " + sueldosBat);
             }
 
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -90,6 +87,7 @@ public class CalculaNominas {
         } catch (DatosNoCorrectosException e) {
             System.out.println(e.getMessage());
         }
+        altaEmpleado(empleadosNuevosTxt, empleadosMap);
     }
 
     private static void generarTxtBase(String textoTxt) {
@@ -140,24 +138,20 @@ public class CalculaNominas {
     }
 
     private static String registraEmpleado(Empleado emp) {
-        return emp.dni + "\n"
-                + emp.nombre + "\n"
-                + emp.sexo + "\n"
-                + emp.anyos + "\n"
-                + emp.getCategoria();
+        return emp.dni + "\n" + emp.nombre + "\n" + emp.sexo + "\n" + emp.anyos + "\n" + emp.getCategoria();
     }
 
-    private static void altaEmpleado(Map<String, Empleado> empleadosMap) throws SQLException, DatosNoCorrectosException {
+    private static void altaEmpleado(Map<String, Empleado> empleadosMap) throws DatosNoCorrectosException {
         Scanner sc = new Scanner(System.in);
-        System.out.println("Introduce el DNI");
+        System.out.println("Introduce el DNI:");
         String dni = sc.nextLine();
-        System.out.println("Introduce el nombre");
+        System.out.println("Introduce el nombre:");
         String nombre = sc.nextLine();
-        System.out.println("Introduce el sexo (F o M)");
+        System.out.println("Introduce el sexo (F o M):");
         char sexo = sc.nextLine().charAt(0);
-        System.out.println("Introduce los años de experiencia (0 si no tiene)");
+        System.out.println("Introduce los años de experiencia (0 si no tiene):");
         int anyos = sc.nextInt();
-        System.out.println("Introduce la categoría (1 si es nuevo)");
+        System.out.println("Introduce la categoría (1 si es nuevo):");
         int categoria = sc.nextInt();
         try {
             empleadosMap.put(dni, (new Empleado(dni, nombre, sexo, categoria, anyos)));
@@ -165,12 +159,9 @@ public class CalculaNominas {
             throw new DatosNoCorrectosException("Datos no válidos");
         }
         try {
-            Connection connection = DriverManager.getConnection(
-                    "jdbc:mariadb://localhost:3306/gestion_nominas",
-                    "root", "123456"
-            );
+            Connection connection = DriverManager.getConnection("jdbc:mariadb://localhost:3306/gestion_nominas", "root", "123456");
             try (PreparedStatement statement = connection.prepareStatement("""
-                      INSERT INTO empleados ?, ?, ?, ?, ?
+                      INSERT INTO empleados VALUES (?, ?, ?, ?, ?);
                     """)) {
                 statement.setString(1, dni);
                 statement.setString(2, nombre);
@@ -180,15 +171,48 @@ public class CalculaNominas {
                 statement.executeUpdate();
 
                 try (PreparedStatement statement2 = connection.prepareStatement("""
-                          INSERT INTO nominas ?, ?
+                          INSERT INTO nominas VALUES (?, ?)
                         """)) {
                     statement2.setString(1, dni);
                     statement2.setInt(2, Nomina.sueldo(empleadosMap.get(dni)));
+                    statement2.executeUpdate();
                 }
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
+        }
+    }
 
+    private static void altaEmpleado(String empleadosNuevosTxt, Map<String, Empleado> empleadosMap) {
+        try {
+            Connection connection = DriverManager.getConnection("jdbc:mariadb://localhost:3306/gestion_nominas", "root", "123456");
+            lecturaTxt(empleadosNuevosTxt, empleadosMap);
+            for (Empleado each : empleadosMap.values())
+                try (PreparedStatement statement = connection.prepareStatement("""
+                          INSERT INTO empleados VALUES (?, ?, ?, ?, ?)
+                          ON DUPLICATE KEY UPDATE (nombre=?, sexo=?, anyos=?, categoria=?);
+                        """)) {
+                    statement.setString(1, each.dni);
+                    statement.setString(2, each.nombre);
+                    statement.setString(3, String.valueOf(each.sexo));
+                    statement.setInt(4, each.anyos);
+                    statement.setInt(5, each.getCategoria());
+                    statement.setString(6, each.nombre);
+                    statement.setString(7, String.valueOf(each.sexo));
+                    statement.setInt(8, each.anyos);
+                    statement.setInt(9, each.getCategoria());
+                    statement.executeBatch();
+
+                    try (PreparedStatement statement2 = connection.prepareStatement("""
+                              INSERT INTO nominas VALUES (?, ?)
+                            """)) {
+                        statement2.setString(1, each.dni);
+                        statement2.setInt(2, Nomina.sueldo(empleadosMap.get(each.dni)));
+                        statement2.executeBatch();
+                    }
+                }
+        } catch (IOException | SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 }
