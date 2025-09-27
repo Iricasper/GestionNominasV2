@@ -37,25 +37,9 @@ public class CalculaNominas {
                 escribe(each);
             }
 
-            try (FileWriter fw = new FileWriter(empleadosTxt)) {
+            guardarTxt(empleadosTxt, empleadosMap);
 
-                for (Empleado each : empleadosMap.values()) {
-                    fw.write(registraEmpleado(each) + "\n");
-                }
-
-            } catch (IOException ex) {
-                System.err.println("Se produjo un error al abrir o escribir en el fichero " + empleadosTxt);
-            }
-
-            try (FileWriter fw = new FileWriter(sueldosBat)) {
-                for (Empleado each : empleadosMap.values()) {
-                    fw.write(each.dni + "\n");
-                    fw.write(Nomina.sueldo(each) + "\n");
-                }
-
-            } catch (IOException e) {
-                System.err.println("Se produjo un error al abrir o escribir en el fichero " + sueldosBat);
-            }
+            guardarBat(sueldosBat, empleadosMap);
 
             try (PreparedStatement statement = connection.prepareStatement("""
                       UPDATE empleados
@@ -88,6 +72,33 @@ public class CalculaNominas {
             System.out.println(e.getMessage());
         }
         altaEmpleado(empleadosNuevosTxt, empleadosMap);
+
+        guardarTxt(empleadosTxt, empleadosMap);
+        guardarBat(sueldosBat, empleadosMap);
+    }
+
+    private static void guardarTxt(String empleadosTxt, Map<String, Empleado> empleadosMap) {
+        try (FileWriter fw = new FileWriter(empleadosTxt)) {
+
+            for (Empleado each : empleadosMap.values()) {
+                fw.write(registraEmpleado(each) + "\n");
+            }
+
+        } catch (IOException ex) {
+            System.err.println("Se produjo un error al abrir o escribir en el fichero " + empleadosTxt);
+        }
+    }
+
+    private static void guardarBat(String sueldosBat, Map<String, Empleado> empleadosMap) {
+        try (FileWriter fw = new FileWriter(sueldosBat)) {
+            for (Empleado each : empleadosMap.values()) {
+                fw.write(each.dni + "\n");
+                fw.write(Nomina.sueldo(each) + "\n");
+            }
+
+        } catch (IOException e) {
+            System.err.println("Se produjo un error al abrir o escribir en el fichero " + sueldosBat);
+        }
     }
 
     private static void generarTxtBase(String textoTxt) {
@@ -187,30 +198,38 @@ public class CalculaNominas {
         try {
             Connection connection = DriverManager.getConnection("jdbc:mariadb://localhost:3306/gestion_nominas", "root", "123456");
             lecturaTxt(empleadosNuevosTxt, empleadosMap);
-            for (Empleado each : empleadosMap.values())
                 try (PreparedStatement statement = connection.prepareStatement("""
                           INSERT INTO empleados VALUES (?, ?, ?, ?, ?)
-                          ON DUPLICATE KEY UPDATE (nombre=?, sexo=?, anyos=?, categoria=?);
+                          ON DUPLICATE KEY UPDATE nombre=?, sexo=?, anyos=?, categoria=?;
                         """)) {
-                    statement.setString(1, each.dni);
-                    statement.setString(2, each.nombre);
-                    statement.setString(3, String.valueOf(each.sexo));
-                    statement.setInt(4, each.anyos);
-                    statement.setInt(5, each.getCategoria());
-                    statement.setString(6, each.nombre);
-                    statement.setString(7, String.valueOf(each.sexo));
-                    statement.setInt(8, each.anyos);
-                    statement.setInt(9, each.getCategoria());
+                    for (Empleado each : empleadosMap.values()) {
+                        statement.setString(1, each.dni);
+                        statement.setString(2, each.nombre);
+                        statement.setString(3, String.valueOf(each.sexo));
+                        statement.setInt(4, each.anyos);
+                        statement.setInt(5, each.getCategoria());
+                        statement.setString(6, each.nombre);
+                        statement.setString(7, String.valueOf(each.sexo));
+                        statement.setInt(8, each.anyos);
+                        statement.setInt(9, each.getCategoria());
+                        statement.addBatch();
+                    }
                     statement.executeBatch();
 
                     try (PreparedStatement statement2 = connection.prepareStatement("""
                               INSERT INTO nominas VALUES (?, ?)
+                              ON DUPLICATE KEY UPDATE sueldo=?
                             """)) {
+                        for (Empleado each : empleadosMap.values()) {
                         statement2.setString(1, each.dni);
                         statement2.setInt(2, Nomina.sueldo(empleadosMap.get(each.dni)));
-                        statement2.executeBatch();
+                        statement2.setInt(3, Nomina.sueldo(empleadosMap.get(each.dni)));
+                        statement2.addBatch();
                     }
+                        statement2.executeBatch();
                 }
+            }
+
         } catch (IOException | SQLException e) {
             throw new RuntimeException(e);
         }
